@@ -259,3 +259,8 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/Builds
+/Library
+/Temp
+/3D Platformer.sln
+/3D Platformer.csproj
