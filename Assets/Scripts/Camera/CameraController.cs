@@ -11,6 +11,8 @@ public class CameraController : MonoBehaviour {
         }
     }
 
+    public KeyCode recenterKey, joystickRecenterKey;
+
     Quaternion rotationOffset;
 
     void Start () {
@@ -28,6 +30,9 @@ public class CameraController : MonoBehaviour {
             offset = Quaternion.AngleAxis (verticalAngle - 30f, transform.right) * offset;
         else if (verticalAngle > 80f)
             offset = Quaternion.AngleAxis (verticalAngle - 80f, transform.right) * offset;
+
+        if (Input.GetKey (recenterKey) || Input.GetKey (joystickRecenterKey))
+            offset = Quaternion.AngleAxis(-HorizontalAngle + target.eulerAngles.y, Vector3.up) * offset;
 
         transform.position = target.position + offset;
         transform.rotation = Quaternion.LookRotation (-offset) * rotationOffset;

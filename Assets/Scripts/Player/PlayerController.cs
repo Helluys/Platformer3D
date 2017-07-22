@@ -2,7 +2,6 @@
 
 public class PlayerController : MonoBehaviour {
     public bool Grounded { get { return feet.Hit; } }
-    TriggerChildCounter feet;
 
     Vector3 velocity = new Vector3 ();
     public Vector3 gravity;
@@ -14,30 +13,55 @@ public class PlayerController : MonoBehaviour {
     public float bodyRepulsion = 100f;
 
     public CameraController cameraController;
+    public KeyCode jumpKey, joystickJumpKey;
+
+    TriggerCounter feet, front, back, left, right;
     Rigidbody rb;
 
     private void Start () {
-        feet = transform.GetComponentInChildren<TriggerChildCounter> ();
+        // Fetch all triggers
+        feet = transform.Find ("Feet").GetComponent<TriggerCounter> ();
+        front = transform.Find ("Front").GetComponent<TriggerCounter> ();
+        back = transform.Find ("Back").GetComponent<TriggerCounter> ();
+        left = transform.Find ("Left").GetComponent<TriggerCounter> ();
+        right = transform.Find ("Right").GetComponent<TriggerCounter> ();
+
         rb = GetComponent<Rigidbody> ();
     }
 
+    private void Update () {
+        // Jump !
+        if (Grounded && (Input.GetKeyDown (jumpKey) || Input.GetKeyDown (joystickJumpKey)))
+            velocity.y = Mathf.Sqrt (-2f * gravity.y * jumpHeight);
+    }
+
     private void FixedUpdate () {
-        rb.WakeUp (); // Avoid stopping collision detection when not moving
+        // Avoid stopping collision detection when not moving
+        rb.WakeUp ();
 
-        Vector3 targetVelocity = Quaternion.AngleAxis (cameraController.HorizontalAngle, Vector3.up) * (inputFactor * runSpeed * (Input.GetAxis ("Vertical") * Vector3.forward + Input.GetAxis ("Horizontal") * Vector3.right));
-
-        velocity = Vector3.Lerp (Vector3.ProjectOnPlane (velocity, transform.up), targetVelocity, Grounded ? acceleration : airControl * acceleration) + Vector3.Project (velocity, transform.up);
+        // Apply input to target velocity
+        Vector3 targetVelocity = (inputFactor * runSpeed * (Input.GetAxis ("Vertical") * Vector3.forward + Input.GetAxis ("Horizontal") * Vector3.right));
+        targetVelocity = Quaternion.AngleAxis (cameraController.HorizontalAngle, Vector3.up) * targetVelocity;
 
         GameObject closestGround = feet.ClosestHitObject;
+        // Add moving platform's velocity when we leave it
+        if (transform.parent != null && (closestGround == null || closestGround.transform != transform.parent)) {
+            MovingPlatform platform = transform.parent.GetComponent<MovingPlatform> ();
+            if (platform != null)
+                velocity += platform.Velocity;
+        }
+        // Set parent to the platform we are on (for moving with mobile platforms)
         transform.parent = closestGround == null ? null : closestGround.transform;
 
+        // Interpolate velocity towards target velocity on horizontal plane, vertical axis is untouched
+        velocity = Vector3.Lerp (Vector3.ProjectOnPlane (velocity, transform.up), targetVelocity, Grounded ? acceleration : airControl * acceleration) + Vector3.Project (velocity, transform.up);
+
+        // Apply gravity and linera damping
         if (!Grounded)
             velocity += gravity * Time.fixedDeltaTime;
-        velocity -= linearDamping * Vector3.ProjectOnPlane (velocity, Vector3.up) * Time.fixedDeltaTime;
-
-        if (Grounded && Input.GetAxis ("Jump") > 0.9f)
-            velocity.y = Mathf.Sqrt (-2f * gravity.y * jumpHeight);
-
+        velocity -= linearDamping * velocity * Time.fixedDeltaTime;
+        
+        // Apply velocity to position, and rotate towards movement direction
         transform.position += velocity * Time.fixedDeltaTime;
         if (targetVelocity.magnitude > 0.1f)
             transform.rotation = Quaternion.Slerp (transform.rotation, Quaternion.LookRotation (targetVelocity), 0.1f);
@@ -51,6 +75,10 @@ public class PlayerController : MonoBehaviour {
         ExtractBody (collision);
     }
 
+    /// <summary>
+    /// Moves the body out of the given collision
+    /// </summary>
+    /// <param name="collision">The collision we want to get out of</param>
     private void ExtractBody (Collision collision) {
         Vector3 separation = Vector3.zero;
         foreach (ContactPoint contact in collision.contacts) {

@@ -4,7 +4,7 @@ using UnityEngine;
 public class PlayerController_triggers : MonoBehaviour {
     public bool Grounded { get { return triggers["Feet"].DetectorHit; } }
 
-    Dictionary<string, TriggerCounter> triggers = new Dictionary<string, TriggerCounter> ();
+    Dictionary<string, TriggerParentCounter> triggers = new Dictionary<string, TriggerParentCounter> ();
 
     Vector3 velocity = new Vector3 ();
     public Vector3 gravity; 
@@ -17,7 +17,7 @@ public class PlayerController_triggers : MonoBehaviour {
 
     private void Start () {
         foreach (Transform child in transform) {
-            TriggerCounter trigger = child.GetComponent<TriggerCounter> ();
+            TriggerParentCounter trigger = child.GetComponent<TriggerParentCounter> ();
             if (trigger != null)
                 triggers.Add (child.name, trigger);
         }
@@ -40,7 +40,7 @@ public class PlayerController_triggers : MonoBehaviour {
         if (Grounded && Input.GetAxis ("Jump") > 0.9f)
             velocity += Mathf.Sqrt (-2f * gravity.y * jumpHeight) * Vector3.up;
 
-        foreach (TriggerCounter trigger in triggers.Values) {
+        foreach (TriggerParentCounter trigger in triggers.Values) {
             if (trigger.DetectorHit && Vector3.Dot (velocity, transform.TransformVector(trigger.direction)) > 0f)
                 velocity -= Vector3.Project (velocity, transform.TransformVector(trigger.direction));
 
