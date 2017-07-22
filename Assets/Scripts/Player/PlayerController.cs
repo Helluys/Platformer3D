@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class PlayerController : MonoBehaviour {
     public bool Grounded { get { return feet.Hit; } }
@@ -11,28 +12,45 @@ public class PlayerController : MonoBehaviour {
     public float acceleration = 1f;
     public float airControl = 0.1f;
     public float bodyRepulsion = 100f;
+    public float rotationSpeed = 0.1f;
 
     public CameraController cameraController;
     public KeyCode jumpKey, joystickJumpKey;
 
-    TriggerCounter feet, front, back, left, right;
+    Dictionary<string, TriggerCounter> triggers = new Dictionary<string, TriggerCounter> ();
+    TriggerCounter feet;
     Rigidbody rb;
 
     private void Start () {
         // Fetch all triggers
-        feet = transform.Find ("Feet").GetComponent<TriggerCounter> ();
-        front = transform.Find ("Front").GetComponent<TriggerCounter> ();
-        back = transform.Find ("Back").GetComponent<TriggerCounter> ();
-        left = transform.Find ("Left").GetComponent<TriggerCounter> ();
-        right = transform.Find ("Right").GetComponent<TriggerCounter> ();
+        foreach (Transform child in transform) {
+            TriggerCounter trigger = child.GetComponent<TriggerCounter> ();
+            if (trigger) {
+                triggers.Add (child.name, trigger);
+                if (child.name == "Feet")
+                    feet = trigger;
+            }
+        }
 
         rb = GetComponent<Rigidbody> ();
     }
 
     private void Update () {
         // Jump !
-        if (Grounded && (Input.GetKeyDown (jumpKey) || Input.GetKeyDown (joystickJumpKey)))
-            velocity.y = Mathf.Sqrt (-2f * gravity.y * jumpHeight);
+        if (Input.GetKeyDown (jumpKey) || Input.GetKeyDown (joystickJumpKey)) {
+            Vector3 jumpDirection = Grounded ? Vector3.zero : Vector3.up;
+            bool jump = false;
+
+            foreach (TriggerCounter trigger in triggers.Values) {
+                if (trigger.Hit) {
+                    jump = true;
+                    jumpDirection -= trigger.Direction;
+                }
+            }
+
+            if(jump)
+                velocity += Mathf.Sqrt (-2f * gravity.y * jumpHeight) * jumpDirection.normalized;
+        }
     }
 
     private void FixedUpdate () {
@@ -40,7 +58,7 @@ public class PlayerController : MonoBehaviour {
         rb.WakeUp ();
 
         // Apply input to target velocity
-        Vector3 targetVelocity = (inputFactor * runSpeed * (Input.GetAxis ("Vertical") * Vector3.forward + Input.GetAxis ("Horizontal") * Vector3.right));
+        Vector3 targetVelocity = runSpeed * (Input.GetAxis ("Vertical") * Vector3.forward + Input.GetAxis ("Horizontal") * Vector3.right);
         targetVelocity = Quaternion.AngleAxis (cameraController.HorizontalAngle, Vector3.up) * targetVelocity;
 
         GameObject closestGround = feet.ClosestHitObject;
@@ -54,7 +72,7 @@ public class PlayerController : MonoBehaviour {
         transform.parent = closestGround == null ? null : closestGround.transform;
 
         // Interpolate velocity towards target velocity on horizontal plane, vertical axis is untouched
-        velocity = Vector3.Lerp (Vector3.ProjectOnPlane (velocity, transform.up), targetVelocity, Grounded ? acceleration : airControl * acceleration) + Vector3.Project (velocity, transform.up);
+        velocity += Vector3.ProjectOnPlane (targetVelocity - velocity, Vector3.up) * (Grounded ? acceleration : airControl * acceleration) * Time.fixedDeltaTime;
 
         // Apply gravity and linera damping
         if (!Grounded)
@@ -64,7 +82,7 @@ public class PlayerController : MonoBehaviour {
         // Apply velocity to position, and rotate towards movement direction
         transform.position += velocity * Time.fixedDeltaTime;
         if (targetVelocity.magnitude > 0.1f)
-            transform.rotation = Quaternion.Slerp (transform.rotation, Quaternion.LookRotation (targetVelocity), 0.1f);
+            transform.rotation = Quaternion.Slerp (transform.rotation, Quaternion.LookRotation (targetVelocity), rotationSpeed);
     }
 
     private void OnCollisionExit (Collision collision) {

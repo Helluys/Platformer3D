@@ -4,6 +4,7 @@ public class TriggerCounter : MonoBehaviour {
 
     public int HitCount { get; private set; }
     public bool Hit { get { return HitCount > 0; } }
+
     public GameObject ClosestHitObject {
         get {
             if (!Hit)
@@ -22,6 +23,8 @@ public class TriggerCounter : MonoBehaviour {
             return obj;
         }
     }
+
+    public Vector3 Direction { get { return transform.parent.TransformDirection(transform.localPosition + box.center).normalized; } }
 
     BoxCollider box;
 
