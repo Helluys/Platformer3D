@@ -3,6 +3,14 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour {
     public bool Grounded { get { return feet.Hit; } }
+    public bool Walled {
+        get {
+            foreach (TriggerCounter trigger in triggers.Values)
+                if (trigger != feet && trigger.Hit)
+                    return true;
+            return false;
+        }
+    }
 
     Vector3 velocity = new Vector3 ();
     public Vector3 gravity;
@@ -13,6 +21,7 @@ public class PlayerController : MonoBehaviour {
     public float airControl = 0.1f;
     public float bodyRepulsion = 100f;
     public float rotationSpeed = 0.1f;
+    public float walledFallingSpeed = 5f;
 
     public CameraController cameraController;
     public KeyCode jumpKey, joystickJumpKey;
@@ -20,6 +29,9 @@ public class PlayerController : MonoBehaviour {
     Dictionary<string, TriggerCounter> triggers = new Dictionary<string, TriggerCounter> ();
     TriggerCounter feet;
     Rigidbody rb;
+
+    private float lastJumpTime;
+    private const float jumpDelay = 0.3f;
 
     private void Start () {
         // Fetch all triggers
@@ -36,20 +48,27 @@ public class PlayerController : MonoBehaviour {
     }
 
     private void Update () {
-        // Jump !
-        if (Input.GetKeyDown (jumpKey) || Input.GetKeyDown (joystickJumpKey)) {
-            Vector3 jumpDirection = Grounded ? Vector3.zero : Vector3.up;
+        // Jumping
+        if (Input.GetKeyDown (jumpKey) || Input.GetKeyDown (joystickJumpKey) && CanJump ()) {
+            // Determine jump direction based on walls and ground contacts
             bool jump = false;
-
-            foreach (TriggerCounter trigger in triggers.Values) {
-                if (trigger.Hit) {
-                    jump = true;
-                    jumpDirection -= trigger.Direction;
+            Vector3 jumpDirection = Vector3.up;
+            if (Grounded) {
+                jump = true;
+                jumpDirection = Vector3.up;
+            } else {
+                foreach (TriggerCounter trigger in triggers.Values) {
+                    if (trigger.Hit) {
+                        jump = true;
+                        jumpDirection -= trigger.Direction;
+                    }
                 }
             }
 
-            if(jump)
-                velocity += Mathf.Sqrt (-2f * gravity.y * jumpHeight) * jumpDirection.normalized;
+            if (jump) { // Apply jump formula based on jump height, gravity and jump direction
+                velocity += Mathf.Sqrt (-2f * gravity.y * jumpHeight) * jumpDirection.normalized * (Vector3.ProjectOnPlane (jumpDirection, Vector3.up).magnitude > 0.1f ? 1.5f : 1f) - velocity.y * Vector3.up;
+                lastJumpTime = Time.time;
+            }
         }
     }
 
@@ -74,15 +93,23 @@ public class PlayerController : MonoBehaviour {
         // Interpolate velocity towards target velocity on horizontal plane, vertical axis is untouched
         velocity += Vector3.ProjectOnPlane (targetVelocity - velocity, Vector3.up) * (Grounded ? acceleration : airControl * acceleration) * Time.fixedDeltaTime;
 
-        // Apply gravity and linera damping
-        if (!Grounded)
-            velocity += gravity * Time.fixedDeltaTime;
+        // Apply gravity and linear damping
+        if (!Grounded) {
+            if (Walled && CanJump ())
+                velocity.y = Mathf.Clamp (velocity.y + 0.5f * gravity.y, -walledFallingSpeed, walledFallingSpeed);
+            else
+                velocity += gravity * Time.fixedDeltaTime;
+        }
         velocity -= linearDamping * velocity * Time.fixedDeltaTime;
-        
+
         // Apply velocity to position, and rotate towards movement direction
         transform.position += velocity * Time.fixedDeltaTime;
         if (targetVelocity.magnitude > 0.1f)
             transform.rotation = Quaternion.Slerp (transform.rotation, Quaternion.LookRotation (targetVelocity), rotationSpeed);
+    }
+
+    private bool CanJump () {
+        return lastJumpTime < Time.fixedTime - jumpDelay;
     }
 
     private void OnCollisionExit (Collision collision) {

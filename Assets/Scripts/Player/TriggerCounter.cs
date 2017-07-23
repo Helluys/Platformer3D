@@ -24,7 +24,11 @@ public class TriggerCounter : MonoBehaviour {
         }
     }
 
-    public Vector3 Direction { get { return transform.parent.TransformDirection(transform.localPosition + box.center).normalized; } }
+    public Vector3 Direction {
+        get {
+            return transform.parent.TransformDirection (transform.localPosition + box.center).normalized;
+        }
+    }
 
     BoxCollider box;
 
